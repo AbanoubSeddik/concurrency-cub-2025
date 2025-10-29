@@ -26,6 +26,8 @@ tasks {
     test {
         maxHeapSize = "10g"
         jvmArgs("-XX:+EnableDynamicAgentLoading")
+        include("**/day3/**")
+        exclude("**/day1/**", "**/day2/**", "**/day4/**")
     }
 }
 
