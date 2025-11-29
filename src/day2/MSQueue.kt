@@ -13,14 +13,34 @@ class MSQueue<E> : Queue<E> {
     }
 
     override fun enqueue(element: E) {
-        TODO("Implement me!")
+        val newNode = Node(element)
+        while (true) {
+            val curTail = tail.get()
+            val next = curTail.next.get()
+            if (next == null) {
+                // Try to link new node at the end
+                if (curTail.next.compareAndSet(null, newNode)) {
+                    // Try to move tail forward
+                    tail.compareAndSet(curTail, newNode)
+                    return
+                }
+            } else {
+                // Tail is lagging behind, help it move
+                tail.compareAndSet(curTail, next)
+            }
+        }
     }
 
     override fun dequeue(): E? {
-        TODO("Implement me!")
+        while (true) {
+            val curHead = head.get()
+            val next = curHead.next.get()
+            if (next == null) return null
+            if (head.compareAndSet(curHead, next))
+                return next.element
+        }
     }
 
-    // FOR TEST PURPOSE, DO NOT CHANGE IT.
     override fun validate() {
         check(tail.get().next.get() == null) {
             "At the end of the execution, `tail.next` must be `null`"
