@@ -3,6 +3,8 @@ package day7
 import java.util.*
 import java.util.concurrent.*
 import kotlin.concurrent.*
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.TimeUnit
 
 private val NODE_DISTANCE_COMPARATOR = Comparator<Node> { o1, o2 -> Integer.compare(o1!!.distance, o2!!.distance) }
 
@@ -12,29 +14,43 @@ fun shortestPathParallel(start: Node) {
     // The distance to the start node is `0`
     start.distance = 0
     // Create a priority (by distance) queue and add the start node into it
-    val q = PriorityQueue(workers, NODE_DISTANCE_COMPARATOR) // TODO replace me with a multi-queue based PQ!
-    q.add(start)
+    val q = PriorityBlockingQueue<NodeEntry>(workers, Comparator<NodeEntry> { a, b ->
+        Integer.compare(a.distance, b.distance)
+    }) // TODO replace me with a multi-queue based PQ!
+    q.add(NodeEntry(start, 0))
+    val active = AtomicInteger(0)
     // Run worker threads and wait until the total work is done
     val onFinish = Phaser(workers + 1) // `arrive()` should be invoked at the end by each worker
     repeat(workers) {
         thread {
             while (true) {
-                // TODO Write the required algorithm here,
-                // TODO break from this loop when there is no more node to process.
-                // TODO Be careful, "empty queue" != "all nodes are processed".
-//                val cur: Node? = synchronized(q) { q.poll() }
-//                if (cur == null) {
-//                    if (workIsDone) break else continue
-//                }
-//                for (e in cur.outgoingEdges) {
-//                    if (e.to.distance > cur.distance + e.weight) {
-//                        e.to.distance = cur.distance + e.weight
-//                        q.addOrDecreaseKey(e.to)
-//                    }
-//                }
+                val entry = q.poll(10, TimeUnit.MILLISECONDS)
+                if (entry == null) {
+                    if (active.get() == 0 && q.isEmpty()) break
+                    continue
+                }
+                active.incrementAndGet()
+                if (entry.node.distance != entry.distance) {
+                    active.decrementAndGet()
+                    continue
+                }
+                for (e in entry.node.outgoingEdges) {
+                    val newDistance = entry.distance + e.weight
+                    while (true) {
+                        val cur = e.to.distance
+                        if (newDistance >= cur) break
+                        if (e.to.casDistance(cur, newDistance)) {
+                            q.add(NodeEntry(e.to, newDistance))
+                            break
+                        }
+                    }
+                }
+                active.decrementAndGet()
             }
             onFinish.arrive()
         }
     }
     onFinish.arriveAndAwaitAdvance()
 }
+
+private data class NodeEntry(val node: Node, val distance: Int)
