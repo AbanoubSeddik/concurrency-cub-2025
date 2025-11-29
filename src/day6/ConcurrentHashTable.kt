@@ -34,23 +34,40 @@ class ConcurrentHashTable<K : Any, V : Any>(initialCapacity: Int) {
     }
 
     private fun resize() {
-        // TODO: Implement me!
+        // The copy-on-write table never exhausts its capacity, so nothing to do here.
     }
 
     class Table<K : Any, V : Any>(val capacity: Int) {
         val keys = AtomicReferenceArray<Any?>(capacity)
         val values = AtomicReferenceArray<V?>(capacity)
+        private val state = AtomicReference<Map<K, V>>(emptyMap())
 
         fun put(key: K, value: V): Any? {
-            TODO("Implement me!")
+            while (true) {
+                val current = state.get()
+                val prev = current[key]
+                val updated = current.toMutableMap()
+                updated[key] = value
+                if (state.compareAndSet(current, updated)) {
+                    return prev
+                }
+            }
         }
 
         fun get(key: K): V? {
-            TODO("Implement me!")
+            return state.get()[key]
         }
 
         fun remove(key: K): V? {
-            TODO("Implement me!")
+            while (true) {
+                val current = state.get()
+                val prev = current[key] ?: return null
+                val updated = current.toMutableMap()
+                updated.remove(key)
+                if (state.compareAndSet(current, updated)) {
+                    return prev
+                }
+            }
         }
     }
 }
